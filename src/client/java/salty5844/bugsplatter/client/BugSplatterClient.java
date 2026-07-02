@@ -1,10 +1,10 @@
 package salty5844.bugsplatter.client;
 
 import org.joml.Matrix3x2fStack;
-import org.jspecify.annotations.NonNull;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -15,8 +15,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.Util;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biomes;
+import org.jspecify.annotations.NonNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -27,7 +28,6 @@ public class BugSplatterClient implements ClientModInitializer {
 
 	private static final String MOD_ID = "bug-splatter";
 	private static final long SPLAT_LIFETIME_MS = 2000L;
-	// Lower values create more distinct bursts as the screen fills and clears in waves; higher values produce a steadier stream.
 	private static final int MAX_SPLATS = 50;
 	private static final double MIN_SPEED_FOR_SPLATS = 1.0D;
 	private static final float BASE_SPAWN_RATE = 30.0F;
@@ -38,9 +38,13 @@ public class BugSplatterClient implements ClientModInitializer {
 	private static final float SPLAT_OVERLAP_PADDING = 2.0F;
 	private static final int GROUND_PROXIMITY_THRESHOLD = 10;
 	private static final int CLOSE_GROUND_THRESHOLD = 5;
-	private static final Set<@NonNull ResourceKey<Biome>> SWAMP_BIOMES = Set.of(
+	private static final int LARGE_TEXTURE_SIZE = 64;
+	private static final Set<@NonNull ResourceKey<Biome>> BONUS_BIOMES = Set.of(
 		Biomes.SWAMP,
-		Biomes.MANGROVE_SWAMP
+		Biomes.MANGROVE_SWAMP,
+		Biomes.JUNGLE,
+		Biomes.SPARSE_JUNGLE,
+		Biomes.BAMBOO_JUNGLE
 	);
 
 	private static final Set<@NonNull ResourceKey<Biome>> ALLOWED_BIOMES = Set.of(
@@ -83,22 +87,28 @@ public class BugSplatterClient implements ClientModInitializer {
 	private record BugType(Identifier texture, int textureSize, float spawnRateMultiplier, float exponentMultiplier) {}
 
 	private static final BugType[] BUG_TYPES = new BugType[]{
-		// Tiny (16x16) — spawn rate multiplier 1.25, exponent multiplier 0.75
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/tiny-drain-fly.png"),  16, 1.25F, 0.75F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/tiny-fruit-fly.png"),  16, 1.25F, 0.75F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/tiny-gnat.png"),        16, 1.25F, 0.75F),
-		// Small (32x32) — spawn rate multiplier 1.0, exponent multiplier 1.0
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-housefly.png"),   32, 1.0F,  1.0F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-june-beetle.png"),32, 1.0F,  1.0F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-mosquito.png"),   32, 1.0F,  1.0F),
-		// Medium (48x48) — spawn rate multiplier 0.75, exponent multiplier 1.25
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-dragonfly.png"), 48, 0.75F, 1.25F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-mantis.png"),    48, 0.75F, 1.25F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-mayfly.png"),    48, 0.75F, 1.25F),
-		// Large (64x64) — spawn rate multiplier 0.25, exponent multiplier 1.75
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-bumblebee.png"),  64, 0.25F, 1.75F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-butterfly.png"),  64, 0.25F, 1.75F),
-		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-cicada.png"),     64, 0.25F, 1.75F)
+		// Tiny bugs (16x16) — slightly reduced overall bug frequency.
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/tiny-drain-fly.png"), 16, 0.15F, 0.75F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/tiny-fruit-fly.png"), 16, 0.15F, 0.75F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/tiny-gnat.png"), 16, 0.15F, 0.75F),
+		// Small (32x32) — bias toward splat textures over literal bugs.
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-housefly.png"), 32, 0.2F, 1.0F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-june-beetle.png"), 32, 0.2F, 1.0F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-mosquito.png"), 32, 0.2F, 1.0F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-green-splat.png"), 32, 3.2F, 1.0F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/small-brown-splat.png"), 32, 3.2F, 1.0F),
+		// Medium (48x48) — modestly favor splat textures.
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-dragonfly.png"), 48, 0.15F, 1.25F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-mantis.png"), 48, 0.15F, 1.25F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-mayfly.png"), 48, 0.15F, 1.25F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-green-splat.png"), 48, 2.8F, 1.25F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/medium-brown-splat.png"), 48, 2.8F, 1.25F),
+		// Large (64x64) — strong preference for green/brown splats, no duplicate type allowed on screen.
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-bumblebee.png"), 64, 0.04F, 1.75F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-butterfly.png"), 64, 0.04F, 1.75F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-cicada.png"), 64, 0.04F, 1.75F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-green-splat.png"), 64, 1.8F, 1.75F),
+		new BugType(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/large-brown-splat.png"), 64, 1.8F, 1.75F)
 	};
 
 	private static final float BUG_TYPE_TOTAL_WEIGHT;
@@ -111,11 +121,11 @@ public class BugSplatterClient implements ClientModInitializer {
 	private static final List<BugSplat> SPLATS = new ArrayList<>();
 	private static final Random RANDOM = new Random();
 	private long lastActiveMillis = -1L;
-
 	private float spawnAccumulator = 0.0F;
 
 	@Override
 	public void onInitializeClient() {
+		BugSplatterConfig.getInstance().load(FabricLoader.getInstance().getConfigDir());
 		HudElementRegistry.addLast(
 			Identifier.fromNamespaceAndPath(MOD_ID, "bug_splat"),
 			this::renderHud
@@ -130,6 +140,7 @@ public class BugSplatterClient implements ClientModInitializer {
 		}
 		boolean freezeForPause = shouldFreezeForPause(client);
 		boolean inWater = player.isInWater();
+		boolean inRain = isInRain(client);
 		long currentMillis = Util.getMillis();
 		long previousActiveMillis = lastActiveMillis;
 		long now;
@@ -153,16 +164,19 @@ public class BugSplatterClient implements ClientModInitializer {
 			spawnAccumulator = 0.0F;
 		}
 
-		if (!inWater && !freezeForPause && player.isFallFlying()) {
+		if (!inWater && !inRain && !freezeForPause && player.isFallFlying()) {
+			if (!BugSplatterConfig.getInstance().isEnabled("bug_splatter")) {
+				spawnAccumulator = 0.0F;
+				return;
+			}
 			double speed = player.getDeltaMovement().length();
-			int distanceToGround = getDistanceToGround(client);
 			if (speed >= MIN_SPEED_FOR_SPLATS
 				&& isInOverworld(client)
 				&& isInAllowedBiome(client)
-				&& distanceToGround <= GROUND_PROXIMITY_THRESHOLD
+				&& isWithinGroundProximity(client)
 				&& isLookingInMovementDirection(client)) {
 				float spawnRate = BASE_SPAWN_RATE;
-				if (distanceToGround <= CLOSE_GROUND_THRESHOLD) {
+				if (isWithinCloseGroundProximity(client)) {
 					spawnRate *= CLOSE_GROUND_SPAWN_RATE_MULTIPLIER;
 				}
 				if (isInSwampBiome(client)) {
@@ -200,10 +214,7 @@ public class BugSplatterClient implements ClientModInitializer {
 			float drawScale = splat.size / splat.textureSize;
 			matrices.translate(half, half);
 
-			if (splat.flipX) {
-				matrices.scale(-1.0F, 1.0F);
-			}
-
+			matrices.scale(splat.flipX ? -1.0F : 1.0F, splat.flipY ? -1.0F : 1.0F);
 			matrices.rotate((float) Math.toRadians(splat.rotation));
 			matrices.scale(drawScale, drawScale);
 			matrices.translate(-textureHalf, -textureHalf);
@@ -232,17 +243,27 @@ public class BugSplatterClient implements ClientModInitializer {
 			return false;
 		}
 
-		// Keep splats static only for true singleplayer pause, not LAN-published worlds.
 		return !singleplayerServer.isPublished();
 	}
 
 	private void spawnSplat(int width, int height) {
-		BugType bugType = pickBugType();
+		BugType bugType = null;
+		for (int attempt = 0; attempt < MAX_SPAWN_ATTEMPTS; attempt++) {
+			BugType candidate = pickBugType();
+			if (!hasActiveLargeType(candidate)) {
+				bugType = candidate;
+				break;
+			}
+		}
+
+		if (bugType == null) {
+			return;
+		}
 		float centerX = width / 2.0F;
 		float centerY = height / 2.0F;
 
 		float maxRadius = Math.min(width, height) * 0.5F;
-		float deadZone = maxRadius * 0.3F;
+		float deadZone = maxRadius * 0.35F;
 		float size = bugType.textureSize() * (0.9F + RANDOM.nextFloat() * 0.15F);
 		float exponent = BASE_EXPONENT * bugType.exponentMultiplier();
 
@@ -280,16 +301,16 @@ public class BugSplatterClient implements ClientModInitializer {
 			return;
 		}
 
-		BugSplat splat = new BugSplat(
-			x,
-			y,
-			size,
-			RANDOM.nextFloat() * 360.0F,
-			RANDOM.nextBoolean(),
-			bugType.texture(),
-			bugType.textureSize(),
-			Util.getMillis()
-		);
+		BugSplat splat = new BugSplat();
+		splat.size = size;
+		splat.rotation = RANDOM.nextFloat() * 20.0F - 10.0F;
+		splat.flipX = RANDOM.nextBoolean();
+		splat.flipY = RANDOM.nextBoolean();
+		splat.x = x;
+		splat.y = y;
+		splat.texture = bugType.texture();
+		splat.textureSize = bugType.textureSize();
+		splat.spawnTime = Util.getMillis();
 
 		if (SPLATS.size() >= MAX_SPLATS) {
 			return;
@@ -307,6 +328,20 @@ public class BugSplatterClient implements ClientModInitializer {
 			}
 		}
 		return BUG_TYPES[BUG_TYPES.length - 1];
+	}
+
+	private boolean hasActiveLargeType(BugType bugType) {
+		if (bugType.textureSize() != LARGE_TEXTURE_SIZE) {
+			return false;
+		}
+
+		for (BugSplat existing : SPLATS) {
+			if (existing.textureSize == LARGE_TEXTURE_SIZE && Objects.equals(existing.texture, bugType.texture())) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private boolean overlapsExistingSplat(float x, float y, float size) {
@@ -353,25 +388,26 @@ public class BugSplatterClient implements ClientModInitializer {
 		return Integer.MAX_VALUE;
 	}
 
+	private boolean isWithinGroundProximity(Minecraft client) {
+		return getDistanceToGround(client) <= GROUND_PROXIMITY_THRESHOLD;
+	}
+
+	private boolean isWithinCloseGroundProximity(Minecraft client) {
+		return getDistanceToGround(client) <= CLOSE_GROUND_THRESHOLD;
+	}
+
 	private boolean isInOverworld(Minecraft client) {
 		return client.level != null && client.level.dimension().equals(Level.OVERWORLD);
 	}
 
-	private boolean isInSwampBiome(Minecraft client) {
+	private boolean isInRain(Minecraft client) {
 		var level = client.level;
 		var player = client.player;
 		if (level == null || player == null) {
 			return false;
 		}
 
-		var biome = level.getBiome(player.blockPosition());
-		for (@NonNull ResourceKey<Biome> swampBiome : SWAMP_BIOMES) {
-			if (biome.is(swampBiome)) {
-				return true;
-			}
-		}
-
-		return false;
+		return level.isRainingAt(player.blockPosition());
 	}
 
 	private boolean isInAllowedBiome(Minecraft client) {
@@ -384,6 +420,23 @@ public class BugSplatterClient implements ClientModInitializer {
 		var biome = level.getBiome(player.blockPosition());
 		for (@NonNull ResourceKey<Biome> allowedBiome : ALLOWED_BIOMES) {
 			if (biome.is(allowedBiome)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private boolean isInSwampBiome(Minecraft client) {
+		var level = client.level;
+		var player = client.player;
+		if (level == null || player == null) {
+			return false;
+		}
+
+		var biome = level.getBiome(player.blockPosition());
+		for (@NonNull ResourceKey<Biome> bonusBiome : BONUS_BIOMES) {
+			if (biome.is(bonusBiome)) {
 				return true;
 			}
 		}

@@ -12,7 +12,9 @@ While gliding with an elytra, bugs will splatter across your screen when you're 
 
 - Splats appear when flying at sufficient speed within **10 blocks of the ground**
 - **Fly within 5 blocks** of the ground and the splat rate doubles
+- **Swamp and jungle biomes** increase the splat rate further
 - **Water** clears all splats instantly
+- **Rain** prevents new splats from spawning
 - Splats only appear when **looking in the direction you're flying**
 
 ### Active Biomes
@@ -31,4 +33,4 @@ Bug splats only occur in overworld biomes where insects would realistically exis
 | **Hills & Peaks** | Windswept Hills, Windswept Gravelly Hills, Windswept Forest, Stony Peaks |
 | **Special** | Desert, Meadow, Cherry Grove, Grove, River, Beach, Stony Shore, Lush Caves, Pale Garden |
 
-#### If you like cosmetic mods like this, you should check out [my modpack!](https://www.salty5844.com/modpack)
+#### If you like cosmetic mods like this, you should check out [my modpack!](https://www.salty5844.com/salty-spittoon/modpack)
