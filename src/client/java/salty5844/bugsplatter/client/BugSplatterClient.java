@@ -126,7 +126,7 @@ public class BugSplatterClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		BugSplatterConfig.getInstance().load(FabricLoader.getInstance().getConfigDir());
-		HudElementRegistry.addLast(
+		HudElementRegistry.addFirst(
 			Identifier.fromNamespaceAndPath(MOD_ID, "bug_splat"),
 			this::renderHud
 		);
