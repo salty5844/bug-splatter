@@ -16,6 +16,7 @@ public final class BugSplatterConfig {
 
 	private BugSplatterConfig() {
 		effectEnabled.put("bug_splatter", true);
+		effectEnabled.put("realistic_bugs", true);
 	}
 
 	public static BugSplatterConfig getInstance() {

@@ -2,6 +2,7 @@ package salty5844.bugsplatter.client;
 
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -22,6 +23,7 @@ public final class BugSplatterConfigScreen extends Screen {
 	@Override
 	protected void init() {
 		BugSplatterConfig config = BugSplatterConfig.getInstance();
+		AtomicReference<CycleButton<Boolean>> realisticBugsToggleRef = new AtomicReference<>();
 		int centerX = this.width / 2;
 		String titleText = "Bug Splatter Settings";
 		int titleWidth = this.font.width(titleText);
@@ -35,6 +37,8 @@ public final class BugSplatterConfigScreen extends Screen {
 			String label = formatEffectName(effectKey);
 			if ("bug_splatter".equals(effectKey)) {
 				label = "Bug splatters";
+			} else if ("realistic_bugs".equals(effectKey)) {
+				label = "Realistic bugs";
 			}
 			final String displayLabel = Objects.requireNonNull(label);
 			int labelWidth = this.font.width(displayLabel);
@@ -48,7 +52,17 @@ public final class BugSplatterConfigScreen extends Screen {
 				.withTooltip(value -> Tooltip.create(Component.literal(value ? "Enabled" : "Disabled")))
 				.create(buttonX, rowY, buttonWidth, 20, Component.empty(), (button, value) -> {
 					config.setEnabled(effectKey, value);
+					if ("bug_splatter".equals(effectKey)) {
+						CycleButton<Boolean> realisticBugsToggle = realisticBugsToggleRef.get();
+						if (realisticBugsToggle != null) {
+							realisticBugsToggle.active = value;
+						}
+					}
 				});
+			if ("realistic_bugs".equals(effectKey)) {
+				toggle.active = config.isEnabled("bug_splatter");
+				realisticBugsToggleRef.set(toggle);
+			}
 			this.addRenderableWidget(new net.minecraft.client.gui.components.StringWidget(labelX, rowY, labelWidth, 20, Component.literal(displayLabel), this.font));
 			this.addRenderableWidget(toggle);
 			index++;

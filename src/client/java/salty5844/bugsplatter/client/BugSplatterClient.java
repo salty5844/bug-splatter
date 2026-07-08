@@ -247,9 +247,13 @@ public class BugSplatterClient implements ClientModInitializer {
 	}
 
 	private void spawnSplat(int width, int height) {
+		boolean realisticBugsEnabled = BugSplatterConfig.getInstance().isEnabled("realistic_bugs");
 		BugType bugType = null;
 		for (int attempt = 0; attempt < MAX_SPAWN_ATTEMPTS; attempt++) {
-			BugType candidate = pickBugType();
+			BugType candidate = pickBugType(realisticBugsEnabled);
+			if (candidate == null) {
+				return;
+			}
 			if (!hasActiveLargeType(candidate)) {
 				bugType = candidate;
 				break;
@@ -318,16 +322,41 @@ public class BugSplatterClient implements ClientModInitializer {
 		SPLATS.add(splat);
 	}
 
-	private BugType pickBugType() {
-		float roll = RANDOM.nextFloat() * BUG_TYPE_TOTAL_WEIGHT;
+	private BugType pickBugType(boolean realisticBugsEnabled) {
+		float totalWeight = realisticBugsEnabled ? BUG_TYPE_TOTAL_WEIGHT : getSplatOnlyTotalWeight();
+		if (totalWeight <= 0.0F) {
+			return null;
+		}
+
+		float roll = RANDOM.nextFloat() * totalWeight;
 		float cumulative = 0.0F;
 		for (BugType bugType : BUG_TYPES) {
+			if (!realisticBugsEnabled && !isSplatType(bugType)) {
+				continue;
+			}
 			cumulative += bugType.spawnRateMultiplier();
 			if (roll < cumulative) {
 				return bugType;
 			}
 		}
-		return BUG_TYPES[BUG_TYPES.length - 1];
+		if (realisticBugsEnabled) {
+			return BUG_TYPES[BUG_TYPES.length - 1];
+		}
+		return null;
+	}
+
+	private float getSplatOnlyTotalWeight() {
+		float total = 0.0F;
+		for (BugType bugType : BUG_TYPES) {
+			if (isSplatType(bugType)) {
+				total += bugType.spawnRateMultiplier();
+			}
+		}
+		return total;
+	}
+
+	private boolean isSplatType(BugType bugType) {
+		return bugType.texture().getPath().contains("splat");
 	}
 
 	private boolean hasActiveLargeType(BugType bugType) {
