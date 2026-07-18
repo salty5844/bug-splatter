@@ -33,4 +33,18 @@ Bug splats only occur in overworld biomes where insects would realistically exis
 | **Hills & Peaks** | Windswept Hills, Windswept Gravelly Hills, Windswept Forest, Stony Peaks |
 | **Special** | Desert, Meadow, Cherry Grove, Grove, River, Beach, Stony Shore, Lush Caves, Pale Garden |
 
-#### If you like cosmetic mods like this, you should check out [my modpack!](https://www.salty5844.com/salty-spittoon/modpack)
+## Configuration
+
+Compatible with [Mod Menu](https://modrinth.com/mod/modmenu)
+
+| Setting | Configurations |
+| --- | --- |
+| Bug splatters | ON/OFF (Default: ON) |
+| Realistic bugs | ON/OFF (Default: ON) |
+| Third person splats | ON/OFF (Default: OFF) |
+| Regular ground proximity | Slider 1-100 blocks (Default: 10) |
+| Double-rate ground proximity | Slider 1-100 blocks (Default: 5) |
+| Swamp multiplier | Slider 0.0-10.0 (Default: 1.5) |
+| Jungle multiplier | Slider 0.0-10.0 (Default: 1.5) |
+
+### If you like cosmetic mods like this, you should check out [my modpack!](https://www.salty5844.com/salty-spittoon/modpack)

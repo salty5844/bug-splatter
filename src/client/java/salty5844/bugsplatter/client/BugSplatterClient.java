@@ -6,6 +6,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 
+import net.minecraft.client.CameraType;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -28,20 +29,19 @@ public class BugSplatterClient implements ClientModInitializer {
 
 	private static final String MOD_ID = "bug-splatter";
 	private static final long SPLAT_LIFETIME_MS = 2000L;
-	private static final int MAX_SPLATS = 50;
+	private static final int MAX_SPLATS = 100;
 	private static final double MIN_SPEED_FOR_SPLATS = 1.0D;
 	private static final float BASE_SPAWN_RATE = 30.0F;
 	private static final float CLOSE_GROUND_SPAWN_RATE_MULTIPLIER = 2.0F;
-	private static final float SWAMP_SPAWN_RATE_MULTIPLIER = 1.5F;
 	private static final float BASE_EXPONENT = 2.0F;
 	private static final int MAX_SPAWN_ATTEMPTS = 40;
 	private static final float SPLAT_OVERLAP_PADDING = 2.0F;
-	private static final int GROUND_PROXIMITY_THRESHOLD = 10;
-	private static final int CLOSE_GROUND_THRESHOLD = 5;
 	private static final int LARGE_TEXTURE_SIZE = 64;
-	private static final Set<@NonNull ResourceKey<Biome>> BONUS_BIOMES = Set.of(
+	private static final Set<@NonNull ResourceKey<Biome>> SWAMP_BIOMES = Set.of(
 		Biomes.SWAMP,
-		Biomes.MANGROVE_SWAMP,
+		Biomes.MANGROVE_SWAMP
+	);
+	private static final Set<@NonNull ResourceKey<Biome>> JUNGLE_BIOMES = Set.of(
 		Biomes.JUNGLE,
 		Biomes.SPARSE_JUNGLE,
 		Biomes.BAMBOO_JUNGLE
@@ -138,6 +138,14 @@ public class BugSplatterClient implements ClientModInitializer {
 		if (player == null) {
 			return;
 		}
+		BugSplatterConfig config = BugSplatterConfig.getInstance();
+		CameraType cameraType = client.options.getCameraType();
+		boolean allowCurrentView = cameraType.isFirstPerson()
+			|| config.isThirdPersonSplatsEnabled() && cameraType == CameraType.THIRD_PERSON_BACK;
+		if (!allowCurrentView) {
+			spawnAccumulator = 0.0F;
+			return;
+		}
 		boolean freezeForPause = shouldFreezeForPause(client);
 		boolean inWater = player.isInWater();
 		boolean inRain = isInRain(client);
@@ -165,7 +173,7 @@ public class BugSplatterClient implements ClientModInitializer {
 		}
 
 		if (!inWater && !inRain && !freezeForPause && player.isFallFlying()) {
-			if (!BugSplatterConfig.getInstance().isEnabled("bug_splatter")) {
+			if (!config.isEnabled("bug_splatter")) {
 				spawnAccumulator = 0.0F;
 				return;
 			}
@@ -173,14 +181,17 @@ public class BugSplatterClient implements ClientModInitializer {
 			if (speed >= MIN_SPEED_FOR_SPLATS
 				&& isInOverworld(client)
 				&& isInAllowedBiome(client)
-				&& isWithinGroundProximity(client)
+				&& isWithinGroundProximity(client, config.getRegularGroundProximity())
 				&& isLookingInMovementDirection(client)) {
 				float spawnRate = BASE_SPAWN_RATE;
-				if (isWithinCloseGroundProximity(client)) {
+				if (isWithinCloseGroundProximity(client, config.getDoubleGroundProximity())) {
 					spawnRate *= CLOSE_GROUND_SPAWN_RATE_MULTIPLIER;
 				}
-				if (isInSwampBiome(client)) {
-					spawnRate *= SWAMP_SPAWN_RATE_MULTIPLIER;
+				if (isInBiomeSet(client, SWAMP_BIOMES)) {
+					spawnRate *= (float) config.getSwampMultiplier();
+				}
+				if (isInBiomeSet(client, JUNGLE_BIOMES)) {
+					spawnRate *= (float) config.getJungleMultiplier();
 				}
 				spawnAccumulator += spawnRate * elapsedSeconds;
 				while (spawnAccumulator >= 1.0F) {
@@ -394,7 +405,7 @@ public class BugSplatterClient implements ClientModInitializer {
 		return false;
 	}
 
-	private int getDistanceToGround(Minecraft client) {
+	private int getDistanceToGround(Minecraft client, int maxDistance) {
 		var level = client.level;
 		var player = client.player;
 		if (level == null || player == null) {
@@ -406,7 +417,7 @@ public class BugSplatterClient implements ClientModInitializer {
 		int playerY = playerPos.getY();
 		int playerZ = playerPos.getZ();
 
-		for (int dy = 0; dy <= GROUND_PROXIMITY_THRESHOLD; dy++) {
+		for (int dy = 0; dy <= maxDistance; dy++) {
 			int checkY = playerY - dy;
 			var checkBlock = level.getBlockState(new BlockPos(playerX, checkY, playerZ));
 			if (!checkBlock.isAir()) {
@@ -417,12 +428,12 @@ public class BugSplatterClient implements ClientModInitializer {
 		return Integer.MAX_VALUE;
 	}
 
-	private boolean isWithinGroundProximity(Minecraft client) {
-		return getDistanceToGround(client) <= GROUND_PROXIMITY_THRESHOLD;
+	private boolean isWithinGroundProximity(Minecraft client, int threshold) {
+		return getDistanceToGround(client, threshold) <= threshold;
 	}
 
-	private boolean isWithinCloseGroundProximity(Minecraft client) {
-		return getDistanceToGround(client) <= CLOSE_GROUND_THRESHOLD;
+	private boolean isWithinCloseGroundProximity(Minecraft client, int threshold) {
+		return getDistanceToGround(client, threshold) <= threshold;
 	}
 
 	private boolean isInOverworld(Minecraft client) {
@@ -456,7 +467,7 @@ public class BugSplatterClient implements ClientModInitializer {
 		return false;
 	}
 
-	private boolean isInSwampBiome(Minecraft client) {
+	private boolean isInBiomeSet(Minecraft client, Set<@NonNull ResourceKey<Biome>> biomeKeys) {
 		var level = client.level;
 		var player = client.player;
 		if (level == null || player == null) {
@@ -464,8 +475,8 @@ public class BugSplatterClient implements ClientModInitializer {
 		}
 
 		var biome = level.getBiome(player.blockPosition());
-		for (@NonNull ResourceKey<Biome> bonusBiome : BONUS_BIOMES) {
-			if (biome.is(bonusBiome)) {
+		for (@NonNull ResourceKey<Biome> biomeKey : biomeKeys) {
+			if (biome.is(biomeKey)) {
 				return true;
 			}
 		}
